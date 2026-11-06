@@ -30,6 +30,16 @@ Follow-up gates: lint/typecheck/build pass; `npm test` has 20 passing tests (the
 PostgreSQL; `npm run test:e2e` has 10 passing Chromium desktop/mobile checks. Those
 browser session checks still control Auth/HTTP and are not evidence of live Supabase.
 
+## Public-repository scan — 2026-11-06
+
+The maintainer explicitly changed the portfolio repositories to public during this
+workstream; this workstream did not change visibility. Before the follow-up push,
+Gitleaks 8.30.1 scanned Git history and the working directory with `--redact=100`.
+History had no findings. The first directory scan found ten generated Next preview /
+Server Action keys under ignored `.next` and `.next-e2e` artifacts. Those local build
+artifacts were removed after the passing build/E2E gates; no source credential or
+pushed history needed rewriting. Both scans were then repeated before pushing.
+
 ## Not exercised against external services
 
 Docker was not running in the development environment. The full local Supabase stack and its Auth/PostgREST integration were not started; SQL was executed against an isolated PostgreSQL cluster with an auth-role shim matching `auth.uid()`. The Supabase seed's password and identities shape are intended for local Supabase, but a full-stack smoke remains necessary before connecting real contacts.
@@ -48,4 +58,4 @@ No real WhatsApp message was sent. Cloud/Evolution adapters have deterministic r
 
 ## Social preview
 
-`docs/social-preview.png` is a ready-to-upload 1200×630 card. GitHub does not offer an initial social-preview upload for a new private repository; upload it after deciding to publish. Existing private repositories with a previous image are an exception. See [GitHub's documented restriction](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/customizing-your-repositorys-social-media-preview). The repository remains private.
+`docs/social-preview.png` is a ready-to-upload 1200×630 card. GitHub does not offer an initial social-preview upload for a new private repository; upload it after deciding to publish. Existing private repositories with a previous image are an exception. See [GitHub's documented restriction](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/customizing-your-repositorys-social-media-preview). The repository is now public by the maintainer’s explicit decision; this workstream made no visibility changes.

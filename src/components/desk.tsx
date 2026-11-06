@@ -1,7 +1,8 @@
 'use client';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
-import { createClient } from '@supabase/supabase-js';
+import { LoginDialog } from './login-dialog';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -47,26 +48,39 @@ export function Desk({ connection }: { connection: Connection | null }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [compose, setCompose] = useState('');
-  const [supabase] = useState(() =>
-    connection
-      ? createClient(connection.url, connection.key, {
-          auth: { persistSession: false, autoRefreshToken: false },
-        })
-      : null,
-  );
+  const [detailVersion, setDetailVersion] = useState(0);
+  const sessionGeneration = useRef(0);
+  const selectedLead = useRef(selected);
+  const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
   const lead = leads.find((l) => l.id === selected);
   const filtered = leads.filter((l) =>
     `${l.name} ${l.company}`.toLowerCase().includes(search.toLowerCase()),
   );
-  async function refresh(access = token) {
-    const response = await fetch('/api/crm', { headers: { Authorization: `Bearer ${access}` } });
-    if (!response.ok) throw new Error('Sessão expirada ou CRM indisponível. Entre novamente.');
-    const data = z.object({ leads: z.array(leadSchema) }).parse(await response.json());
-    setLeads(data.leads);
-    return data.leads;
+  function selectLead(id: string) {
+    selectedLead.current = id;
+    setSelected(id);
+    setCompose('');
+    setDetailVersion((version) => version + 1);
+  }
+  async function refresh(access = token, generation = sessionGeneration.current) {
+    try {
+      const response = await fetch('/api/crm', {
+        headers: { Authorization: `Bearer ${access}` },
+      });
+      if (!response.ok) throw new Error('Sessão expirada ou CRM indisponível. Entre novamente.');
+      const data = z.object({ leads: z.array(leadSchema) }).parse(await response.json());
+      // A response from a previous session must never restore its private records.
+      if (generation !== sessionGeneration.current) return null;
+      setLeads(data.leads);
+      return data.leads;
+    } catch (error) {
+      if (generation !== sessionGeneration.current) return null;
+      throw error;
+    }
   }
   async function act(action: Action, target = lead) {
     if (!target || busy) return;
+    const generation = sessionGeneration.current;
     setBusy(true);
     setNotice('');
     try {
@@ -77,8 +91,9 @@ export function Desk({ connection }: { connection: Connection | null }) {
           body: JSON.stringify({ id: target.id, revision: target.revision, action }),
         });
         const data: unknown = await response.json();
+        if (generation !== sessionGeneration.current) return;
         if (!response.ok) {
-          await refresh();
+          await refresh(token, generation);
           throw new Error(z.object({ error: z.string() }).parse(data).error);
         }
         setLeads(z.object({ leads: z.array(leadSchema) }).parse(data).leads);
@@ -90,33 +105,64 @@ export function Desk({ connection }: { connection: Connection | null }) {
         if (action.type === 'send') next.messages[next.messages.length - 1].status = 'sent';
         setLeads((previous) => previous.map((l) => (l.id === target.id ? next : l)));
       }
-      if (action.type === 'send') setCompose('');
+      if (action.type === 'send' && selectedLead.current === target.id) setCompose('');
       setNotice(token ? 'CRM atualizado.' : 'Demo atualizada. Nenhuma mensagem real enviada.');
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Não foi possível atualizar.');
+      if (generation === sessionGeneration.current)
+        setNotice(error instanceof Error ? error.message : 'Não foi possível atualizar.');
     } finally {
-      setBusy(false);
+      if (generation === sessionGeneration.current) setBusy(false);
     }
   }
   async function signIn(form: FormData) {
-    if (!supabase) return;
+    if (!connection) return;
+    const client =
+      supabase ??
+      createClient(connection.url, connection.key, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+    setSupabase(client);
+    const generation = ++sessionGeneration.current;
+    selectLead(selected);
     setBusy(true);
     setNotice('');
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await client.auth.signInWithPassword({
         email: String(form.get('email')),
         password: String(form.get('password')),
       });
+      if (generation !== sessionGeneration.current) return;
       if (error || !data.session) throw new Error('E-mail ou senha inválidos.');
-      const loaded = await refresh(data.session.access_token);
+      const loaded = await refresh(data.session.access_token, generation);
+      if (!loaded || generation !== sessionGeneration.current) return;
       setToken(data.session.access_token);
-      setSelected(loaded[0]?.id ?? '');
+      selectLead(loaded[0]?.id ?? '');
+      setSearch('');
+      setView('pipeline');
       setLogin(false);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Falha ao entrar.');
+      if (generation === sessionGeneration.current)
+        setNotice(error instanceof Error ? error.message : 'Falha ao entrar.');
     } finally {
-      setBusy(false);
+      if (generation === sessionGeneration.current) setBusy(false);
     }
+  }
+  function signOut() {
+    sessionGeneration.current += 1;
+    void supabase?.auth.signOut({ scope: 'local' });
+    const demo = demoLeads();
+    setToken('');
+    setLeads(demo);
+    selectLead(demo[0].id);
+    setSearch('');
+    setView('pipeline');
+    setBusy(false);
+    setNotice('Sessão encerrada.');
+  }
+  function closeLogin() {
+    sessionGeneration.current += 1;
+    setLogin(false);
+    setBusy(false);
   }
   const budget = leads
     .filter((l) => l.stage !== 'closed')
@@ -184,19 +230,6 @@ export function Desk({ connection }: { connection: Connection | null }) {
             <strong>Operador</strong>
             <small>{token ? 'Supabase conectado' : 'Modo demonstração'}</small>
           </div>
-          {token && (
-            <button
-              aria-label="Sair"
-              onClick={() => {
-                void supabase?.auth.signOut();
-                setToken('');
-                setLeads(demoLeads());
-                setNotice('Sessão encerrada.');
-              }}
-            >
-              <LogOut size={16} />
-            </button>
-          )}
         </div>
       </aside>
       <main>
@@ -211,6 +244,12 @@ export function Desk({ connection }: { connection: Connection | null }) {
               <span className="live-dot" />
               {token ? 'Conectado ao Supabase' : 'Demo interativa · dados fictícios'}
             </span>
+            {token && (
+              <button className="text-button" aria-label="Sair" onClick={signOut}>
+                <LogOut size={14} />
+                Sair
+              </button>
+            )}
             {connection && !token && (
               <button className="text-button" onClick={() => setLogin(true)}>
                 Conectar CRM
@@ -238,7 +277,7 @@ export function Desk({ connection }: { connection: Connection | null }) {
                 void refresh().catch((e) => setNotice(String(e)));
               } else {
                 setLeads(demoLeads());
-                setSelected(demoLeads()[0].id);
+                selectLead(demoLeads()[0].id);
                 setNotice('Demo restaurada.');
               }
             }}
@@ -314,10 +353,7 @@ export function Desk({ connection }: { connection: Connection | null }) {
                             <button
                               className={`lead-card ${selected === l.id ? 'selected' : ''}`}
                               key={l.id}
-                              onClick={() => {
-                                setSelected(l.id);
-                                setCompose('');
-                              }}
+                              onClick={() => selectLead(l.id)}
                             >
                               <div className="card-top">
                                 <span className={`avatar tone-${index}`}>{initials(l.name)}</span>
@@ -371,7 +407,7 @@ export function Desk({ connection }: { connection: Connection | null }) {
                   {filtered
                     .filter((l) => l.call_at)
                     .map((l) => (
-                      <button key={l.id} className="appointment" onClick={() => setSelected(l.id)}>
+                      <button key={l.id} className="appointment" onClick={() => selectLead(l.id)}>
                         <CalendarDays />
                         <div>
                           <strong>{l.name}</strong>
@@ -389,7 +425,11 @@ export function Desk({ connection }: { connection: Connection | null }) {
               )}
             </div>
             {lead ? (
-              <aside className="detail" aria-label="Detalhes do contato">
+              <aside
+                key={`${detailVersion}:${lead.id}`}
+                className="detail"
+                aria-label="Detalhes do contato"
+              >
                 <div className="detail-heading">
                   <span className="eyebrow">A CONVERSA EM CONTEXTO</span>
                   <MessageCircle size={16} />
@@ -695,39 +735,7 @@ export function Desk({ connection }: { connection: Connection | null }) {
             <X size={14} />
           </button>
         </div>
-        {login && (
-          <dialog
-            className="login-modal"
-            aria-labelledby="login-title"
-            ref={(node) => {
-              if (node && !node.open) node.showModal();
-            }}
-            onClose={() => setLogin(false)}
-          >
-            <button
-              className="modal-close"
-              aria-label="Fechar login"
-              onClick={() => setLogin(false)}
-            >
-              <X />
-            </button>
-            <h2 id="login-title">Conectar seu CRM</h2>
-            <p>Entre com o usuário do seu Supabase.</p>
-            <form action={signIn}>
-              <label>
-                E-mail
-                <input name="email" type="email" autoComplete="username" required autoFocus />
-              </label>
-              <label>
-                Senha
-                <input name="password" type="password" autoComplete="current-password" required />
-              </label>
-              <button className="primary-button" disabled={busy}>
-                Entrar no workspace
-              </button>
-            </form>
-          </dialog>
-        )}
+        {login && <LoginDialog busy={busy} onClose={closeLogin} onSubmit={signIn} />}
       </main>
     </div>
   );

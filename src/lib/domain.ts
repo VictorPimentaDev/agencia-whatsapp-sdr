@@ -172,6 +172,7 @@ export function transition(lead: Lead, action: Action, now = new Date()): Lead {
   return leadSchema.parse(next);
 }
 
+// shortcut: keep 200 operational entries; add a durable archive for full audit retention.
 export function retainMessages(messages: Message[]) {
   const pending = messages.filter((m) => ['sending', 'uncertain'].includes(m.status));
   const recent = messages

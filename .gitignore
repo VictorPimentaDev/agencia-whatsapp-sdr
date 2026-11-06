@@ -1,0 +1,16 @@
+node_modules/
+.next/
+out/
+coverage/
+test-results/
+playwright-report/
+.env*
+!.env.example
+*.tsbuildinfo
+.DS_Store
+.claude/
+.codex/
+CLAUDE.md
+AGENTS.md
+supabase/.temp/
+supabase/.branches/

@@ -12,6 +12,34 @@ Verified locally on 2026-11-06, Node 24 / PostgreSQL 17:
 
 The `CI` workflow is the repeatable source of truth for the checked-in revision.
 
+## Local Supabase integration follow-up — 2026-11-06
+
+Added `npm run test:supabase`: a disposable-project runner and eight assertion groups
+using real Auth/PostgREST with the CRM/webhook handlers in process. It includes seed
+password login, two synthetic tenants, direct RLS checks, concurrent dedupe/revisions,
+opt-out, human handoff, uncertain-send reconciliation and erasure/replay. It never
+sends to WhatsApp. See [execution, boundaries and cleanup](supabase-integration.md).
+
+Current result: **BLOCKED, exit 1; zero live assertion groups executed**. The local
+Docker context is `default`; `/var/run/docker.sock` does not exist. No local Supabase
+project was started and no hosted project was contacted. The READY report's live
+Auth/PostgREST gap remains open. No production defect was reproduced or patched.
+
+Follow-up gates: lint/typecheck/build pass; `npm test` has 20 passing tests (the original
+17 plus three harness safety checks); `npm run test:db` passes against isolated
+PostgreSQL; `npm run test:e2e` has 10 passing Chromium desktop/mobile checks. Those
+browser session checks still control Auth/HTTP and are not evidence of live Supabase.
+
+## Public-repository scan — 2026-11-06
+
+The maintainer explicitly changed the portfolio repositories to public during this
+workstream; this workstream did not change visibility. Before the follow-up push,
+Gitleaks 8.30.1 scanned Git history and the working directory with `--redact=100`.
+History had no findings. The first directory scan found ten generated Next preview /
+Server Action keys under ignored `.next` and `.next-e2e` artifacts. Those local build
+artifacts were removed after the passing build/E2E gates; no source credential or
+pushed history needed rewriting. Both scans were then repeated before pushing.
+
 ## Not exercised against external services
 
 Docker was not running in the development environment. The full local Supabase stack and its Auth/PostgREST integration were not started; SQL was executed against an isolated PostgreSQL cluster with an auth-role shim matching `auth.uid()`. The Supabase seed's password and identities shape are intended for local Supabase, but a full-stack smoke remains necessary before connecting real contacts.
@@ -30,4 +58,4 @@ No real WhatsApp message was sent. Cloud/Evolution adapters have deterministic r
 
 ## Social preview
 
-`docs/social-preview.png` is a ready-to-upload 1200×630 card. GitHub does not offer an initial social-preview upload for a new private repository; upload it after deciding to publish. Existing private repositories with a previous image are an exception. See [GitHub's documented restriction](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/customizing-your-repositorys-social-media-preview). The repository remains private.
+`docs/social-preview.png` is a ready-to-upload 1200×630 card. GitHub does not offer an initial social-preview upload for a new private repository; upload it after deciding to publish. Existing private repositories with a previous image are an exception. See [GitHub's documented restriction](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/customizing-your-repositorys-social-media-preview). The repository is now public by the maintainer’s explicit decision; this workstream made no visibility changes.

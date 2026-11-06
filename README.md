@@ -102,6 +102,8 @@ Unit/contract tests exercise qualification, consent, window boundaries, HMAC, we
 
 `test:db` requires PostgreSQL tools or `PG_TEST_URL` pointing to a fresh, disposable database. It creates and removes its own isolated local cluster by default. It does not connect to your existing Supabase database. CI runs application checks plus a PostgreSQL 17 service with the same SQL assertions.
 
+For the real local Auth/PostgREST integration, run `npm run test:supabase` with Docker running. The harness creates a disposable project with synthetic tenants and never connects to a hosted project. Its first run is **blocked by the unavailable Docker daemon**, not a live pass. See [the integration guide and exact blocker](docs/supabase-integration.md).
+
 [Verification and known limits →](docs/verification.md) · [Contributing →](CONTRIBUTING.md)
 
 ## Em português

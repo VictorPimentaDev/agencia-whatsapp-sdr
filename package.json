@@ -15,6 +15,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:db": "bash scripts/test-db.sh",
+    "test:supabase": "tsx scripts/test-supabase.ts",
     "test:e2e": "playwright test",
     "mcp": "tsx scripts/mcp.ts"
   },
